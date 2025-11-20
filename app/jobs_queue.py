@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Final
 import uuid
 from app.redis_client import redis_client
+from app.job_store import create_job_record
 import json
 
 JOB_QUEUE_KEY: Final[str] = "jobs:queue"
@@ -23,9 +24,11 @@ async def enqueue_job(job_type: str, payload: dict[str, Any] | None = None) -> s
     # dict -> json
     raw = json.dumps(job)
 
+    # job status 생성 (status: "PENDING")
+    await create_job_record(job_id, job_type, payload)
+
     # lpush는 리스트의 왼쪽에 요소 추가. 추후 brpop 와 조합하면 fifo 큐 처럼 사용가능
     await redis_client.lpush(JOB_QUEUE_KEY, raw)
-
     return job_id
 
 async def dequeue_job_blocking(timeout: int = 0) -> dict[str, Any] | None:
@@ -48,4 +51,5 @@ async def dequeue_job_blocking(timeout: int = 0) -> dict[str, Any] | None:
 
     _queue_key, raw = result
     job: dict[str, Any] = json.loads(raw)
+
     return job

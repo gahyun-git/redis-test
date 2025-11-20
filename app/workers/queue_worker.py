@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 from app.jobs_queue import dequeue_job_blocking
+from app.job_store import update_job_status
 import asyncio
 from time import sleep
 
@@ -14,6 +15,9 @@ async def process_job(job: dict[str, Any]) -> None:
     job_type = job.get("type")
     payload = job.get("payload")
 
+    if job_id is not None:
+        await update_job_status(job_id, status="RUNNING")
+
     print(f"🚀 처리 시작 - job_id={job_id}, type={job_type}, payload={payload}")
 
     # 여기에서 실제로는:
@@ -24,6 +28,8 @@ async def process_job(job: dict[str, Any]) -> None:
     # 등을 수행
     await asyncio.sleep(2.0)
 
+    if job_id is not None:
+        await update_job_status(job_id, status="COMPLETED")
     print(f"✅ 처리 완료 - job_id={job_id}")
 
 
@@ -38,10 +44,14 @@ async def worker_loop() -> None:
 
         if job is None:
             continue
+
+        job_id = job.get("id")
         
         try:
             await process_job(job)
         except Exception as exc:
+            if job_id is not None:
+                await update_job_status(job_id, status="FAILED", error=str(exc))
             print(f"❌ 작업 처리 중 예외 발생: {exc!r}")
 
 def main() -> None:
